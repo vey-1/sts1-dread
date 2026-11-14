@@ -22,6 +22,11 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Install
 
 图标由 `tools/make_icons.py` 生成（纯标准库）。
 
+## 安装
+从 [Releases](https://github.com/vey-1/sts1-dread/releases) 下载 `Dread.jar`，放进游戏目录的 `mods\` 文件夹，
+用 ModTheSpire 启动并勾选 BaseMod 和 Dread。对应游戏版本 `12-18-2022`（Steam 正式版）。
+
 ## 状态
-第一版（0.1.0）：补丁全部能织入原版代码（ModTheSpire `--out-jar` 检查通过），**尚未实际进游戏打过**。平衡性未测。
+当前版本 0.2.0：补丁全部能织入原版代码（ModTheSpire `--out-jar` 检查通过），已修复第三幕崩溃。
+**平衡性尚未系统测试**，遇到崩溃或机制不对请开 issue，附上 `ModTheSpire` 日志和种子。
 本仓库不包含任何游戏原版代码或资源。
