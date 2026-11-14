@@ -130,7 +130,7 @@ public final class Themes {
     }
 
     public static void applyTo(AbstractMonster m, boolean battleStart) {
-        Tier t = Dread.tierOf(m);
+        Tier t = Dread.tierOf(m, !battleStart);
         if (t == Tier.NONE || Fields.themed.get(m)) return;
         Fields.themed.set(m, true);
         String key = Dread.themeKey();
@@ -210,8 +210,11 @@ public final class Themes {
             split.triggered = true;
             split.pending = true;
             split.flash();
-            m.setMove("分裂", SPLIT_MOVE, AbstractMonster.Intent.UNKNOWN);
-            m.createIntent();
+            whenIntentSettled(() -> {
+                if (!alive(m)) return;
+                m.setMove("分裂", SPLIT_MOVE, AbstractMonster.Intent.UNKNOWN);
+                m.createIntent();
+            });
         }
 
         ThemePowers.Ember ember = (ThemePowers.Ember) m.getPower(ThemePowers.Ember.ID);
@@ -237,15 +240,36 @@ public final class Themes {
                 st.triggered = true;
                 st.pending = true;
                 st.flash();
-                EnemyMoveInfo mv = ReflectionHacks.getPrivate(m, AbstractMonster.class, "move");
-                st.savedMove = mv == null ? null
-                        : new EnemyMoveInfo(mv.nextMove, mv.intent, mv.baseDamage, mv.multiplier, mv.isMultiDamage);
-                st.savedName = m.moveName;
-                m.setMove("眩晕", STUN_MOVE, AbstractMonster.Intent.STUN);
-                m.createIntent();
+                whenIntentSettled(() -> {
+                    if (!alive(m)) return;
+                    EnemyMoveInfo mv = ReflectionHacks.getPrivate(m, AbstractMonster.class, "move");
+                    st.savedMove = mv == null ? null
+                            : new EnemyMoveInfo(mv.nextMove, mv.intent, mv.baseDamage, mv.multiplier, mv.isMultiDamage);
+                    st.savedName = m.moveName;
+                    m.setMove("眩晕", STUN_MOVE, AbstractMonster.Intent.STUN);
+                    m.createIntent();
+                });
             }
             st.updateDescription();
         }
+    }
+
+    /**
+     * 改意图的时机：玩家回合里立即改；怪物回合里（例如荆棘反伤打到门槛）原版随后还会执行
+     * RollMoveAction 重掷意图，所以排到队尾，等重掷之后再改，避免被覆盖。
+     */
+    static void whenIntentSettled(Runnable r) {
+        if (!AbstractDungeon.actionManager.turnHasEnded) {
+            r.run();
+            return;
+        }
+        bottom(new AbstractGameAction() {
+            @Override
+            public void update() {
+                r.run();
+                isDone = true;
+            }
+        });
     }
 
     static void onKilledByPlayer(AbstractMonster dead) {

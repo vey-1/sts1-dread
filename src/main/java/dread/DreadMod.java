@@ -15,7 +15,8 @@ import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoomBoss;
-import com.megacrit.cardcrawl.vfx.cardManip.ShowCardAndObtainEffect;
+import com.megacrit.cardcrawl.unlock.UnlockTracker;
+import com.megacrit.cardcrawl.vfx.cardManip.ShowCardBrieflyEffect;
 import dread.themes.Themes;
 import dread.ui.DreadToggle;
 
@@ -69,7 +70,8 @@ public class DreadMod implements PostInitializeSubscriber, PostDungeonInitialize
     public void receivePostDungeonInitialize() {
         if (!com.megacrit.cardcrawl.core.CardCrawlGame.loadingSave
                 && AbstractDungeon.floorNum <= 1 && AbstractDungeon.actNum <= 1) {
-            Dread.resetRun(Dread.selected);
+            // 每日挑战、自定义模式不吃恐惧模式开关。
+            Dread.resetRun(Dread.selected && !Settings.isDailyRun && !Settings.isTrial);
         }
     }
 
@@ -89,7 +91,12 @@ public class DreadMod implements PostInitializeSubscriber, PostDungeonInitialize
         int act = AbstractDungeon.actNum;
         if (act < 1 || act > 3 || Dread.cursedActs.contains(act)) return;
         Dread.cursedActs.add(act);
-        AbstractDungeon.effectList.add(new ShowCardAndObtainEffect(new AscendersBane(),
+        // 和原版 A10 开局给进阶之灾一样直接放进牌组（不走获得卡牌流程，护身符也挡不住），
+        // 记账和入牌组同时完成，不存在「动画没放完就存档」导致丢牌的窗口。
+        AscendersBane bane = new AscendersBane();
+        UnlockTracker.markCardAsSeen(bane.cardID);
+        AbstractDungeon.player.masterDeck.addToTop(bane);
+        AbstractDungeon.effectList.add(new ShowCardBrieflyEffect(bane.makeStatEquivalentCopy(),
                 Settings.WIDTH / 2.0f, Settings.HEIGHT / 2.0f));
     }
 

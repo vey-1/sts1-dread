@@ -92,7 +92,9 @@ public final class Act3Bosses {
 
     static SpireReturn<Void> enragedBeam(AbstractMonster m) {
         if (!Dread.on() || !BossHooks.Fields.enraged.get(m)) return SpireReturn.Continue();
-        m.setMove(BEAM, AbstractMonster.Intent.ATTACK, m.damage.get(0).base, 2, true);
+        // 十面体的光束会塞眩晕，原版用「攻击+负面」图标；甜甜圈是纯攻击。
+        AbstractMonster.Intent intent = m instanceof Deca ? AbstractMonster.Intent.ATTACK_DEBUFF : AbstractMonster.Intent.ATTACK;
+        m.setMove(BEAM, intent, m.damage.get(0).base, 2, true);
         return SpireReturn.Return();
     }
 

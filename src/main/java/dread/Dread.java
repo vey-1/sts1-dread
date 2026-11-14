@@ -2,6 +2,8 @@ package dread;
 
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
+import com.megacrit.cardcrawl.monsters.exordium.SlaverBlue;
+import com.megacrit.cardcrawl.monsters.exordium.SlaverRed;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.EventRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoomBoss;
@@ -54,13 +56,19 @@ public final class Dread {
 
     public enum Tier { NONE, NORMAL, ELITE }
 
-    /** 这个敌人吃主题时用哪一档数值。Boss 房间（本体与随从）不吃。 */
-    public static Tier tierOf(AbstractMonster m) {
+    /**
+     * 这个敌人吃主题时用哪一档数值。
+     * Boss 房间（本体与随从）不吃；战斗中途生成的（召唤、分裂）一律小怪值；
+     * 事件战开场就在的敌人按精英值；精英房里精英本体、以及奴隶头目带的蓝/红奴隶贩子（用户 11-14 定：按精英）按精英值。
+     */
+    public static Tier tierOf(AbstractMonster m, boolean spawnedMidFight) {
         if (!on() || m == null) return Tier.NONE;
         AbstractRoom room = AbstractDungeon.getCurrRoom();
         if (room == null || room instanceof MonsterRoomBoss) return Tier.NONE;
+        if (spawnedMidFight) return Tier.NORMAL;
         if (room instanceof EventRoom) return Tier.ELITE;
-        if (room instanceof MonsterRoomElite && m.type == AbstractMonster.EnemyType.ELITE) return Tier.ELITE;
+        if (room instanceof MonsterRoomElite && (m.type == AbstractMonster.EnemyType.ELITE
+                || m instanceof SlaverBlue || m instanceof SlaverRed)) return Tier.ELITE;
         return Tier.NORMAL;
     }
 
