@@ -1,0 +1,11 @@
+{
+  "modid": "dread",
+  "name": "Dread 恐惧模式",
+  "author_list": ["vey-1"],
+  "description": "塔1 恐惧模式：固定 A20，Boss 机制强化并强化本幕敌人，每幕 Boss 后叠一张进阶之灾。",
+  "version": "0.1.0",
+  "sts_version": "12-18-2022",
+  "mts_version": "3.30.0",
+  "dependencies": ["basemod"],
+  "update_json": ""
+}
