@@ -113,6 +113,10 @@ public final class Themes {
         @SpirePostfixPatch
         public static void Postfix(AbstractMonster __instance) {
             DreadBossPower.applyIfBoss(__instance);
+            if (Dread.on() && __instance instanceof com.megacrit.cardcrawl.monsters.ending.CorruptHeart
+                    && !__instance.hasPower(dread.powers.BloodGaugePower.ID)) {
+                __instance.powers.add(new dread.powers.BloodGaugePower(__instance));
+            }
             applyTo(__instance, true);
         }
     }

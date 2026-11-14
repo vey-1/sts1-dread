@@ -135,6 +135,20 @@ def blades():
         layers.append((box(x, 95, 1.0, 6.5, 0.4), ink, None, 0))
     return layers
 
+def blood_gauge():
+    """血弹蓄积：暗底徽记，一枚血滴，下方三道刻度（代表在累计）。"""
+    ink = (10, 2, 4)
+    red = grad(20, 96, (255, 96, 80), (150, 8, 20))
+    layers = [
+        (circle(64, 64, 45), (24, 6, 10), ink, 4),
+        (ring(64, 64, 37, 3.5), (150, 18, 28), None, 0),
+        (smin(circle(64, 70, 22), cone(64, 66, 17, 64, 18, 0.0), 11), red, ink, 4),
+        (cone(56, 70, 3.2, 60, 46, 0.6), (255, 210, 200), None, 0),
+    ]
+    for i, x in enumerate((48, 64, 80)):
+        layers.append((box(x, 104, 5, 2.2, 1), (230, 60, 50) if i < 2 else (90, 30, 34), ink, 1.5))
+    return layers
+
 def render(layers, size):
     px = 128.0 / size
     buf = bytearray()
@@ -170,7 +184,7 @@ def png(path, size, raw):
 
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
-    for name, fn in (("dread_boss", eye), ("proliferate", slime), ("vengeance", blades)):
+    for name, fn in (("dread_boss", eye), ("proliferate", slime), ("vengeance", blades), ("blood_gauge", blood_gauge)):
         L = fn()
         for s in (48, 128):
             png(os.path.join(OUT, f"{name}_{s}.png"), s, render(L, s))
