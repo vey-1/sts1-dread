@@ -14,7 +14,6 @@ import com.megacrit.cardcrawl.actions.common.MakeTempCardInDiscardAction;
 import com.megacrit.cardcrawl.actions.common.MakeTempCardInDrawPileAction;
 import com.megacrit.cardcrawl.actions.common.SpawnMonsterAction;
 import com.megacrit.cardcrawl.actions.unique.RemoveDebuffsAction;
-import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.cards.DamageInfo;
 import com.megacrit.cardcrawl.cards.status.Burn;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
@@ -26,6 +25,10 @@ import com.megacrit.cardcrawl.monsters.ending.SpireSpear;
 import com.megacrit.cardcrawl.monsters.exordium.AcidSlime_L;
 import com.megacrit.cardcrawl.monsters.exordium.AcidSlime_M;
 import com.megacrit.cardcrawl.monsters.exordium.AcidSlime_S;
+import com.megacrit.cardcrawl.monsters.exordium.GremlinWizard;
+import com.megacrit.cardcrawl.monsters.exordium.Lagavulin;
+import com.megacrit.cardcrawl.monsters.exordium.Looter;
+import com.megacrit.cardcrawl.monsters.exordium.SlaverRed;
 import com.megacrit.cardcrawl.monsters.exordium.SlimeBoss;
 import com.megacrit.cardcrawl.monsters.exordium.SpikeSlime_L;
 import com.megacrit.cardcrawl.monsters.exordium.SpikeSlime_M;
@@ -43,6 +46,7 @@ import com.megacrit.cardcrawl.rooms.MonsterRoomBoss;
 import com.megacrit.cardcrawl.rooms.MonsterRoomElite;
 import dread.Dread;
 import dread.Dread.Tier;
+import dread.powers.DreadBossPower;
 import dread.powers.ThemePowers;
 import javassist.CannotCompileException;
 import javassist.expr.ExprEditor;
@@ -62,7 +66,10 @@ public final class Themes {
     static final String HEART = "The Heart";
 
     static final byte STUN_MOVE = -77;
-    static final byte SPLIT_MOVE = -78;
+    static final byte RALLY_MOVE = -79;
+
+    /** 打晕后每回合格挡的硬上限（用户 11-14 定：绝对不能超过 20，原版守护者防御形态也是 20）。 */
+    static final int STAGGER_BLOCK_CAP = 20;
 
     /** 共用的时间扭曲计数（每场战斗清零）。 */
     static int sharedWarpCount = 0;
@@ -105,6 +112,7 @@ public final class Themes {
     public static class PreBattle {
         @SpirePostfixPatch
         public static void Postfix(AbstractMonster __instance) {
+            DreadBossPower.applyIfBoss(__instance);
             applyTo(__instance, true);
         }
     }
@@ -137,13 +145,14 @@ public final class Themes {
         if (key == null) return;
         switch (key) {
             case SLIME:
-                if (!isSlime(m)) power(m, new ThemePowers.Split(m, Dread.pick(t, 1, 2)));
+                if (!isSlime(m)) power(m, new ThemePowers.Proliferate(m, Dread.pick(t, 1, 2)));
                 break;
             case GUARDIAN: {
                 float thr = t == Tier.ELITE ? 0.50f : 0.40f;
-                float blk = t == Tier.ELITE ? 0.35f : 0.25f;
+                float blk = t == Tier.ELITE ? 0.25f : 0.20f;
                 int block = Math.round(m.maxHealth * blk);
                 if (t == Tier.NORMAL) block = Math.max(5, block);
+                block = Math.min(STAGGER_BLOCK_CAP, block);
                 power(m, new ThemePowers.Stagger(m, Math.max(1, Math.round(m.maxHealth * thr)), block));
                 break;
             }
@@ -205,16 +214,13 @@ public final class Themes {
         }
         boolean half = m.currentHealth <= m.maxHealth / 2;
 
-        ThemePowers.Split split = (ThemePowers.Split) m.getPower(ThemePowers.Split.ID);
-        if (split != null && half && !split.triggered) {
-            split.triggered = true;
-            split.pending = true;
-            split.flash();
-            whenIntentSettled(() -> {
-                if (!alive(m)) return;
-                m.setMove("分裂", SPLIT_MOVE, AbstractMonster.Intent.UNKNOWN);
-                m.createIntent();
-            });
+        // 增殖：不改意图，下回合行动前额外生成小史莱姆，然后照常出招。
+        ThemePowers.Proliferate pro = (ThemePowers.Proliferate) m.getPower(ThemePowers.Proliferate.ID);
+        if (pro != null && half && !pro.triggered) {
+            pro.triggered = true;
+            pro.pending = true;
+            pro.flash();
+            pro.updateDescription();
         }
 
         ThemePowers.Ember ember = (ThemePowers.Ember) m.getPower(ThemePowers.Ember.ID);
@@ -225,12 +231,19 @@ public final class Themes {
             if (ember.extraDiscard > 0) bottom(new MakeTempCardInDiscardAction(new Burn(), ember.extraDiscard));
         }
 
+        // 背水：下回合改为「清负面 + 力量」，原本的招式顺延一回合（开场招不会被吞掉）。
         ThemePowers.Rally rally = (ThemePowers.Rally) m.getPower(ThemePowers.Rally.ID);
         if (rally != null && half && !rally.triggered) {
             rally.triggered = true;
+            rally.pending = true;
             rally.flash();
-            bottom(new RemoveDebuffsAction(m));
-            bottom(new ApplyPowerAction(m, m, new StrengthPower(m, rally.amount), rally.amount));
+            whenIntentSettled(() -> {
+                if (!alive(m)) return;
+                rally.savedMove = saveMove(m);
+                rally.savedName = m.moveName;
+                m.setMove(ThemePowers.Rally.NAME, RALLY_MOVE, AbstractMonster.Intent.BUFF);
+                m.createIntent();
+            });
         }
 
         ThemePowers.Stagger st = (ThemePowers.Stagger) m.getPower(ThemePowers.Stagger.ID);
@@ -238,20 +251,35 @@ public final class Themes {
             st.taken += lost;
             if (st.taken >= st.threshold) {
                 st.triggered = true;
-                st.pending = true;
                 st.flash();
-                whenIntentSettled(() -> {
-                    if (!alive(m)) return;
-                    EnemyMoveInfo mv = ReflectionHacks.getPrivate(m, AbstractMonster.class, "move");
-                    st.savedMove = mv == null ? null
-                            : new EnemyMoveInfo(mv.nextMove, mv.intent, mv.baseDamage, mv.multiplier, mv.isMultiDamage);
-                    st.savedName = m.moveName;
-                    m.setMove("眩晕", STUN_MOVE, AbstractMonster.Intent.STUN);
-                    m.createIntent();
-                });
+                if (m instanceof Lagavulin && !Boolean.TRUE.equals(
+                        ReflectionHacks.getPrivate(m, Lagavulin.class, "isOutTriggered"))) {
+                    // 沉睡中的乐加维林：原版这一下就会把它打醒，下回合是「苏醒」（什么都不做），
+                    // 这就当作眩晕；苏醒那回合不给格挡，之后 2 回合给。
+                    st.blockDelay = 1;
+                    st.blockTurnsLeft = 2;
+                } else {
+                    st.pending = true;
+                    whenIntentSettled(() -> {
+                        if (!alive(m)) return;
+                        st.savedMove = saveMove(m);
+                        m.setMove("眩晕", STUN_MOVE, AbstractMonster.Intent.STUN);
+                        m.createIntent();
+                    });
+                }
             }
             st.updateDescription();
         }
+    }
+
+    static EnemyMoveInfo saveMove(AbstractMonster m) {
+        EnemyMoveInfo mv = ReflectionHacks.getPrivate(m, AbstractMonster.class, "move");
+        return mv == null ? null : new EnemyMoveInfo(mv.nextMove, mv.intent, mv.baseDamage, mv.multiplier, mv.isMultiDamage);
+    }
+
+    /** 去掉招式历史末尾的一条（我们临时插入的「眩晕」「背水」），不影响原版的连招判断。 */
+    static void popHistory(AbstractMonster m) {
+        if (m.moveHistory != null && !m.moveHistory.isEmpty()) m.moveHistory.remove(m.moveHistory.size() - 1);
     }
 
     /**
@@ -284,44 +312,86 @@ public final class Themes {
         }
     }
 
-    // ===================== 敌人行动前：眩晕、分裂、打晕后的格挡 =====================
+    // ===================== 敌人行动前：眩晕、背水、增殖、打晕后的格挡 =====================
 
     public static boolean beforeTakeTurn(AbstractMonster m) {
         ThemePowers.Stagger st = (ThemePowers.Stagger) m.getPower(ThemePowers.Stagger.ID);
         if (st != null) {
             if (st.pending) {
+                // 眩晕回合：这一招被「吃掉」，像已经出过一样往下走（重掷下一招），之后 2 回合给格挡。
                 st.pending = false;
                 st.blockTurnsLeft = 2;
-                if (st.savedMove != null) {
-                    m.setMove(st.savedName, st.savedMove.nextMove, st.savedMove.intent, st.savedMove.baseDamage,
-                            st.savedMove.multiplier, st.savedMove.isMultiDamage);
-                    m.createIntent();
+                if (m.nextMove != STUN_MOVE) {
+                    // 怪物在被打晕后自己改了意图（例如大史莱姆过半血改为分裂）：不拦它，眩晕作废，只保留之后的格挡。
+                    st.updateDescription();
                 } else {
-                    m.rollMove();
+                    popHistory(m); // 去掉「眩晕」，历史末尾回到被吃掉的那一招
+                    advanceAfterSkippedMove(m, st.savedMove == null ? (byte) -1 : st.savedMove.nextMove);
                     m.createIntent();
+                    st.updateDescription();
+                    return false;
                 }
-                st.updateDescription();
-                return false;
             }
-            if (st.blockTurnsLeft > 0) {
+            if (st.blockDelay > 0) {
+                st.blockDelay--;
+            } else if (st.blockTurnsLeft > 0) {
                 st.blockTurnsLeft--;
                 bottom(new GainBlockAction(m, m, st.block));
                 st.updateDescription();
             }
         }
 
-        ThemePowers.Split split = (ThemePowers.Split) m.getPower(ThemePowers.Split.ID);
-        if (split != null && split.pending) {
-            split.pending = false;
-            spawnSlimes(m, split.amount);
-            m.rollMove();
+        ThemePowers.Rally rally = (ThemePowers.Rally) m.getPower(ThemePowers.Rally.ID);
+        if (rally != null && rally.pending) {
+            rally.pending = false;
+            bottom(new RemoveDebuffsAction(m));
+            bottom(new ApplyPowerAction(m, m, new StrengthPower(m, rally.amount), rally.amount));
+            if (m.nextMove != RALLY_MOVE) {
+                // 怪物自己改了意图（例如鸟被打落）：只给增益，照它自己的意图行动。
+                return true;
+            }
+            EnemyMoveInfo s = rally.savedMove;
+            popHistory(m); // 背水
+            if (s != null) {
+                popHistory(m); // 原招在历史里只算一次
+                m.setMove(rally.savedName, s.nextMove, s.intent, s.baseDamage, s.multiplier, s.isMultiDamage);
+            } else {
+                m.rollMove();
+            }
             m.createIntent();
             return false;
+        }
+
+        ThemePowers.Proliferate pro = (ThemePowers.Proliferate) m.getPower(ThemePowers.Proliferate.ID);
+        if (pro != null && pro.pending) {
+            pro.pending = false;
+            pro.updateDescription();
+            spawnSlimes(m, pro.amount);
         }
         return true;
     }
 
-    // ===================== 史莱姆分裂与摆位 =====================
+    /**
+     * 被打晕吃掉一招之后，定下一招。多数怪在 getMove 里按招式历史选招，直接重掷即可；
+     * 少数第一幕的怪在 takeTurn 里推进自己的状态，跳过 takeTurn 会卡住，这里替它们推进一步。
+     * （守护者主题只在第一幕生效，所以只需覆盖第一幕的怪。）
+     */
+    static void advanceAfterSkippedMove(AbstractMonster m, byte skipped) {
+        if (m instanceof Looter) {
+            // 抢劫(1) ×2 → 突刺(4) 或烟雾弹(2) → 烟雾弹(2) → 逃跑(3)
+            if (skipped == 4) { m.setMove((byte) 2, AbstractMonster.Intent.DEFEND); return; }
+            if (skipped == 2 || skipped == 3) { m.setMove((byte) 3, AbstractMonster.Intent.ESCAPE); return; }
+        } else if (m instanceof GremlinWizard) {
+            if (skipped == 1) ReflectionHacks.setPrivate(m, GremlinWizard.class, "currentCharge", 0); // 终极冲击被吃掉，重新蓄力
+        } else if (m instanceof Lagavulin) {
+            if (skipped == 1) ReflectionHacks.setPrivate(m, Lagavulin.class, "debuffTurnCount", 0); // 灵魂虹吸被吃掉
+        } else if (m instanceof SlaverRed) {
+            if (skipped == 2) ReflectionHacks.setPrivate(m, SlaverRed.class, "usedEntangle", true); // 缠绕被吃掉
+        }
+        m.rollMove();
+    }
+
+    // ===================== 增殖：小史莱姆摆位 =====================
 
     static final float SLIME_W = 130.0f, SLIME_H = 100.0f, GAP = 10.0f;
 
@@ -365,7 +435,6 @@ public final class Themes {
             }
             if (!overlap) return c;
         }
-        // 实在放不下：叠在最上方
         float top = parent.hb.y + parent.hb.height;
         for (Rectangle t : taken) top = Math.max(top, t.y + t.height);
         return new float[]{parent.hb.cX, top + g};
@@ -373,13 +442,17 @@ public final class Themes {
 
     // ===================== 共享时间扭曲 =====================
 
-    public static void onCardUsed(AbstractCard card) {
+    /**
+     * 由每个持有者的能力在「出牌结算后」调用（与原版时间扭曲同一时机）；只有排在最前的存活持有者负责计数，
+     * 其余持有者直接返回。不能在 BaseMod 的「出牌时」事件里结束回合：那时原版还要读出牌队列，会崩溃。
+     */
+    public static void onAfterUseCard(ThemePowers.SharedWarp caller) {
         if (AbstractDungeon.getMonsters() == null) return;
         List<AbstractMonster> holders = new ArrayList<>();
         for (AbstractMonster m : AbstractDungeon.getMonsters().monsters) {
             if (alive(m) && m.hasPower(ThemePowers.SharedWarp.ID)) holders.add(m);
         }
-        if (holders.isEmpty()) return;
+        if (holders.isEmpty() || holders.get(0) != caller.owner) return;
         sharedWarpCount++;
         boolean fire = sharedWarpCount >= ThemePowers.SharedWarp.THRESHOLD;
         if (fire) sharedWarpCount = 0;

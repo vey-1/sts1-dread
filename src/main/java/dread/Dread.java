@@ -30,6 +30,9 @@ public final class Dread {
     /** 每一幕的主题 Boss（第一次在该幕战斗时记录 bossKey；第三幕双 Boss 取地图显示的第一个）。 */
     public static Map<Integer, String> actThemes = new HashMap<>();
 
+    /** 每一幕已打死的 Boss 数（A20 第三幕要打死第二只才发诅咒）。 */
+    public static Map<Integer, Integer> bossKills = new HashMap<>();
+
     public static boolean on() {
         return active;
     }
@@ -41,6 +44,7 @@ public final class Dread {
         active = isDread;
         cursedActs = new HashSet<>();
         actThemes = new HashMap<>();
+        bossKills = new HashMap<>();
     }
 
     /** 当前幕的主题 Boss key；没有记录时用当前 bossKey 并记下。 */

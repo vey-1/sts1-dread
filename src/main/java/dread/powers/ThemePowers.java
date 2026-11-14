@@ -1,25 +1,35 @@
 package dread.powers;
 
+import com.megacrit.cardcrawl.actions.utility.UseCardAction;
+import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.core.AbstractCreature;
 import com.megacrit.cardcrawl.monsters.EnemyMoveInfo;
+import dread.themes.Themes;
 
-/** 十条主题里需要自定义能力的六条。触发逻辑统一在 {@link dread.themes.Themes}，这里只放状态与说明。 */
+/** 主题里需要自定义能力的几条。触发逻辑统一在 {@link Themes}，这里只放状态与说明。 */
 public final class ThemePowers {
     private ThemePowers() {}
 
-    /** 史莱姆老大：首次过半血，下回合改为分裂。amount = 分出几只。 */
-    public static class Split extends DreadPower {
-        public static final String ID = "dread:Split";
+    /** 史莱姆老大：首次过半血，下回合行动时额外生成小史莱姆（照常出招）。和原版「分裂」不是一回事，故改名「增殖」。 */
+    public static class Proliferate extends DreadPower {
+        public static final String ID = "dread:Proliferate";
         public boolean triggered = false;
         public boolean pending = false;
 
-        public Split(AbstractCreature owner, int count) {
-            super(ID, "分裂", owner, count, "split");
+        public Proliferate(AbstractCreature owner, int count) {
+            super(ID, "增殖", owner, count, "dread:proliferate");
         }
 
         @Override
         public void updateDescription() {
-            description = "第一次生命值降到一半以下时，下回合改为分裂出 #b" + amount + " 只小史莱姆。";
+            if (pending) {
+                description = "下回合行动时，会 #y额外 生成 #b" + amount + " 只小史莱姆，并照常执行显示的意图。";
+            } else if (triggered) {
+                description = "已增殖过。";
+            } else {
+                description = "第一次生命值降到一半以下后，下回合行动时会 #y额外 生成 #b" + amount
+                        + " 只小史莱姆，并照常执行显示的意图（不会占用它的行动）。";
+            }
         }
     }
 
@@ -32,8 +42,9 @@ public final class ThemePowers {
         public boolean triggered = false;
         public boolean pending = false;
         public int blockTurnsLeft = 0;
+        /** 在开始给格挡前先跳过的回合数（沉睡乐加维林的「苏醒」回合）。 */
+        public int blockDelay = 0;
         public EnemyMoveInfo savedMove;
-        public String savedName;
 
         public Stagger(AbstractCreature owner, int threshold, int block) {
             super(ID, "可被打晕", owner, threshold, "modeShift");
@@ -48,7 +59,7 @@ public final class ThemePowers {
             if (triggered) {
                 description = "已被打晕过。剩余 #b" + blockTurnsLeft + " 回合每回合获得 #b" + block + " 点 #y格挡 。";
             } else {
-                description = "再受到 #b" + Math.max(0, threshold - taken) + " 点伤害会被 #y眩晕 ，跳过本回合意图；之后 #b2 回合每回合获得 #b"
+                description = "再受到 #b" + Math.max(0, threshold - taken) + " 点伤害会被 #y眩晕 ：跳过当前意图；之后 #b2 回合每回合获得 #b"
                         + block + " 点 #y格挡 。";
             }
         }
@@ -73,18 +84,23 @@ public final class ThemePowers {
         }
     }
 
-    /** 冠军：首次过半血时清除自身负面并获得力量。 */
+    /** 冠军：首次过半血，下回合改为「清负面 + 力量」，原本的意图顺延到再下一回合。 */
     public static class Rally extends DreadPower {
         public static final String ID = "dread:Rally";
+        public static final String NAME = "背水";
         public boolean triggered = false;
+        public boolean pending = false;
+        public EnemyMoveInfo savedMove;
+        public String savedName;
 
         public Rally(AbstractCreature owner, int str) {
-            super(ID, "背水", owner, str, "anger");
+            super(ID, NAME, owner, str, "anger");
         }
 
         @Override
         public void updateDescription() {
-            description = "第一次生命值降到一半以下时，清除自身所有负面状态并获得 #b" + amount + " 点 #y力量 。";
+            description = "第一次生命值降到一半以下后，下回合改为清除自身所有负面状态并获得 #b" + amount
+                    + " 点 #y力量 ；原本的意图顺延到再下一回合。";
         }
     }
 
@@ -105,6 +121,11 @@ public final class ThemePowers {
             description = "本场战斗你每累计打出 #b" + THRESHOLD + " 张牌（所有敌人共用计数），立刻结束你的回合，该敌人获得 #b"
                     + str + " 点 #y力量 。";
         }
+
+        @Override
+        public void onAfterUseCard(AbstractCard card, UseCardAction action) {
+            Themes.onAfterUseCard(this);
+        }
     }
 
     /** 甜甜圈与十面体：有敌人被你打死时获得力量。 */
@@ -112,7 +133,7 @@ public final class ThemePowers {
         public static final String ID = "dread:Vengeance";
 
         public Vengeance(AbstractCreature owner, int str) {
-            super(ID, "同仇", owner, str, "vigor");
+            super(ID, "同仇", owner, str, "dread:vengeance");
         }
 
         @Override

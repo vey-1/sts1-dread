@@ -26,10 +26,6 @@ public final class DreadToggle {
     private static Hitbox hb;
     private static float pulse = 0f;
 
-    private static final String TITLE = "恐惧模式";
-    private static final String BODY =
-            "固定进阶 20。 NL Boss 更强，并强化本幕所有敌人。 NL 每打完一幕 Boss，牌组多一张 #r进阶之灾 。 NL #r死亡是预期结果。";
-
     public static void loadTextures() {
         iconOn = new Texture(Gdx.files.internal("dreadResources/images/dread_on.png"));
         iconOff = new Texture(Gdx.files.internal("dreadResources/images/dread_off.png"));
@@ -89,10 +85,7 @@ public final class DreadToggle {
             float w = SIZE;
             sb.draw(t, h.cX - w / 2f, h.cY - w / 2f, w / 2f, w / 2f, w, w, s, s, 0f,
                     0, 0, t.getWidth(), t.getHeight(), false, false);
-            if (h.hovered) {
-                TipHelper.renderGenericTip(h.cX + 40.0f * Settings.scale, h.cY + 60.0f * Settings.scale,
-                        TITLE + (Dread.selected ? "（已开启）" : "（点击开启）"), BODY);
-            }
+            // 用户 11-14 定：选角界面只保留按钮，规则说明放在 mod 描述里。
             h.render(sb);
         }
     }

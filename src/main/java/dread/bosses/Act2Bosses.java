@@ -73,12 +73,24 @@ public final class Act2Bosses {
         private static Integer savedStr = null;
     }
 
-    // ================= 收藏家：大负面各 3 层（首回合负面在 BossHooks） =================
-    @SpirePatch(clz = TheCollector.class, method = SpirePatch.CONSTRUCTOR)
-    public static class CollectorCtor {
-        @SpirePostfixPatch
-        public static void Postfix(TheCollector __instance) {
-            if (Dread.on()) ReflectionHacks.setPrivate(__instance, TheCollector.class, "megaDebuffAmt", 3);
+    // ================= 收藏家：第 1 回合召唤，第 2 回合就放大负面（原版 A19+ 各 5 层，不改） =================
+    /** 原版判断「已行动回合数 ≥ 3 且没放过」才放大负面；恐惧模式把读到的回合数 +2，第 1 回合结束后就满足。 */
+    @SpirePatch(clz = TheCollector.class, method = "getMove")
+    public static class CollectorEarlyDebuff {
+        @SpireInstrumentPatch
+        public static ExprEditor Instrument() {
+            return new ExprEditor() {
+                @Override
+                public void edit(FieldAccess f) throws CannotCompileException {
+                    if (f.isReader() && f.getFieldName().equals("turnsTaken")) {
+                        f.replace("{ $_ = dread.bosses.Act2Bosses.collectorTurns($proceed()); }");
+                    }
+                }
+            };
         }
+    }
+
+    public static int collectorTurns(int turnsTaken) {
+        return Dread.on() ? turnsTaken + 2 : turnsTaken;
     }
 }

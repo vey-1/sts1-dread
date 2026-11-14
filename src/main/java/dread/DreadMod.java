@@ -40,6 +40,7 @@ public class DreadMod implements PostInitializeSubscriber, PostDungeonInitialize
                 d.active = Dread.active;
                 d.cursedActs = new ArrayList<>(Dread.cursedActs);
                 d.actThemes = new HashMap<>(Dread.actThemes);
+                d.bossKills = new HashMap<>(Dread.bossKills);
                 return d;
             }
 
@@ -49,6 +50,7 @@ public class DreadMod implements PostInitializeSubscriber, PostDungeonInitialize
                 if (d != null) {
                     if (d.cursedActs != null) Dread.cursedActs = new HashSet<>(d.cursedActs);
                     if (d.actThemes != null) Dread.actThemes = new HashMap<>(d.actThemes);
+                    if (d.bossKills != null) Dread.bossKills = new HashMap<>(d.bossKills);
                 }
             }
         });
@@ -58,6 +60,7 @@ public class DreadMod implements PostInitializeSubscriber, PostDungeonInitialize
         public boolean active;
         public List<Integer> cursedActs;
         public Map<Integer, String> actThemes;
+        public Map<Integer, Integer> bossKills;
     }
 
     @Override
@@ -90,6 +93,11 @@ public class DreadMod implements PostInitializeSubscriber, PostDungeonInitialize
         if (!(room instanceof MonsterRoomBoss)) return;
         int act = AbstractDungeon.actNum;
         if (act < 1 || act > 3 || Dread.cursedActs.contains(act)) return;
+        // A20 第三幕有两只 Boss：打死第二只才算打完这一幕。
+        int kills = Dread.bossKills.getOrDefault(act, 0) + 1;
+        Dread.bossKills.put(act, kills);
+        int needed = (act == 3 && AbstractDungeon.ascensionLevel >= 20) ? 2 : 1;
+        if (kills < needed) return;
         Dread.cursedActs.add(act);
         // 和原版 A10 开局给进阶之灾一样直接放进牌组（不走获得卡牌流程，护身符也挡不住），
         // 记账和入牌组同时完成，不存在「动画没放完就存档」导致丢牌的窗口。
@@ -103,7 +111,6 @@ public class DreadMod implements PostInitializeSubscriber, PostDungeonInitialize
     @Override
     public void receiveCardUsed(AbstractCard card) {
         Dread.cardsThisPlayerTurn++;
-        if (Dread.on()) Themes.onCardUsed(card);
     }
 
     @Override

@@ -89,11 +89,6 @@ public final class BossHooks {
         } else if (m instanceof TheGuardian && m.nextMove == Act1Bosses.GUARDIAN_CHARGE_UP) {
             bottom(new DamageAction(p, m.damage.get(Act1Bosses.GUARDIAN_CHARGE_DMG_INDEX),
                     AbstractGameAction.AttackEffect.BLUNT_LIGHT));
-        } else if (m instanceof TheCollector && m.nextMove == 1 && !Fields.collectorOpened.get(m)) {
-            Fields.collectorOpened.set(m, true);
-            bottom(new ApplyPowerAction(p, m, new WeakPower(p, 2, true), 2));
-            bottom(new ApplyPowerAction(p, m, new VulnerablePower(p, 2, true), 2));
-            bottom(new ApplyPowerAction(p, m, new FrailPower(p, 2, true), 2));
         }
         return true;
     }
