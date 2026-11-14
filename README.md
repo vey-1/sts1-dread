@@ -26,6 +26,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Install
 从 [Releases](https://github.com/vey-1/sts1-dread/releases) 下载 `Dread.jar`，放进游戏目录的 `mods\` 文件夹，
 用 ModTheSpire 启动并勾选 BaseMod 和 Dread。对应游戏版本 `12-18-2022`（Steam 正式版）。
 
+**游戏语言请设为简体中文。** mod 里的文字只有中文，其他语言的游戏字体可能显示不出中文（空白或方块）。
+
 ## 状态
 当前版本 0.2.0：补丁全部能织入原版代码（ModTheSpire `--out-jar` 检查通过），已修复第三幕崩溃。
 **平衡性尚未系统测试**，遇到崩溃或机制不对请开 issue，附上 `ModTheSpire` 日志和种子。
